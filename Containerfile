@@ -47,7 +47,6 @@ RUN echo "" && \
                                 		bash \
                                 		bsd-compat-headers \
                                 		build-base \
-                                		cargo \
                                  		clang21 \
                                  		clang21-static \
                                  		clang21-libclang \
@@ -153,6 +152,13 @@ RUN echo "" && \
         done; \
     fi && \
     mkdir -p /data && \
+    make -C /usr/src/redis/modules clean_environment INSTALL_RUST_TOOLCHAIN=yes || true; \
+    if [ -x /usr/local/lib/rustlib/uninstall.sh ]; then /usr/local/lib/rustlib/uninstall.sh; fi; \
+    rm -rf \
+           /root/.cargo \
+           /tmp/cargo* \
+           /usr/src/redis/modules/rust-* \
+           && \
     make -C /usr/src/redis distclean && \
     chown redis:redis /data && \
     container_build_log add "Redis" "${REDIS_VERSION}" "${REDIS_REPO_URL}" && \
