@@ -17,7 +17,7 @@ LABEL \
         org.opencontainers.image.licenses="MIT"
 
 ARG \
-    REDIS_VERSION="8.8.2" \
+    REDIS_VERSION="8.10.2" \
     REDIS_REPO_URL="https://github.com/redis/redis"
 
 COPY CHANGELOG.md /usr/src/container/CHANGELOG.md
@@ -101,7 +101,7 @@ RUN echo "" && \
                                                 toml \
                                                 && \
 	clone_git_repo "${REDIS_REPO_URL}" "${REDIS_VERSION}" && \
-	pip install -q --upgrade setuptools &&  pip install -q --upgrade pip && PIP_BREAK_SYSTEM_PACKAGES=1 pip install -q addict toml jinja2 ramp-packer && \
+	PIP_BREAK_SYSTEM_PACKAGES=1 pip install -q --upgrade setuptools && PIP_BREAK_SYSTEM_PACKAGES=1 pip install -q --upgrade pip && PIP_BREAK_SYSTEM_PACKAGES=1 pip install -q addict toml jinja2 ramp-packer && \
 	\
     case "$(container_info arch)" in \
         x86_64) \
@@ -132,13 +132,26 @@ RUN echo "" && \
             RUST_DYN_CRT=1 \
             && \
     \
-    make -C /usr/src/redis/modules/redisjson get_source && \
-    sed -i 's/^RUST_FLAGS=$/RUST_FLAGS += -C target-feature=-crt-static/' /usr/src/redis/modules/redisjson/src/Makefile && \
-    grep -E 'RUST_FLAGS' /usr/src/redis/modules/redisjson/src/Makefile && \
+    if [ -f /usr/src/redis/modules/modules.yaml ]; then \
+        make -C /usr/src/redis modules-update; \
+    else \
+        make -C /usr/src/redis/modules/redisjson get_source; \
+    fi && \
+    if [ -f /usr/src/redis/modules/redisjson/src/Makefile ]; then \
+        sed -i 's/^RUST_FLAGS=$/RUST_FLAGS += -C target-feature=-crt-static/' /usr/src/redis/modules/redisjson/src/Makefile; \
+        grep -E 'RUST_FLAGS' /usr/src/redis/modules/redisjson/src/Makefile; \
+    fi && \
     #make -C /usr/src/redis/modules/redisearch get_source && \
     #sed -i "1i#\!/usr/bin/env bash" /usr/src/redis/modules/redisearch/src/deps/VectorSimilarity/deps/ScalableVectorSearch/cmake/patches/apply_patch_toml.sh && \
     make -j "$(nproc)" all && \
     make install && \
+    if [ -f /usr/src/redis/modules/modules.yaml ]; then \
+        for _mod in /usr/src/redis/modules/*/; do \
+            if [ -d "${_mod}src" ]; then \
+                make -C "${_mod}" -f /usr/src/redis/modules/common.mk install || exit 1; \
+            fi; \
+        done; \
+    fi && \
     mkdir -p /data && \
     make -C /usr/src/redis distclean && \
     chown redis:redis /data && \
